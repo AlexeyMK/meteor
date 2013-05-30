@@ -179,12 +179,15 @@ exports.deploy = function (options) {
 // - context
 // - app
 exports.logs = function (options) {
+  console.log('in logs');
   var galaxy = getGalaxy(options.context);
   var logReaderURL = prettyCall(galaxy, "getLogReaderURL", [], {
     'no-log-reader': "Can't find log reader service"
   });
 
+  console.log('connecting to log reader');
   var logReader = getMeteor().connect(logReaderURL);
+  console.log('connected to log reader');
 
   var Log = unipackage.load({
     library: options.context.library,
@@ -192,16 +195,35 @@ exports.logs = function (options) {
     release: options.context.releaseVersion
   }).logging.Log;
 
-  var Collection = getMeteor().Collection;
-  var Logs = new Collection("logs", logReader);
-  Logs.find().observe({
-    added: function(log) {
-      var parsed = Log.parse(log.obj);
-      if (parsed)
-        console.log(Log.format(parsed, {color: true}));
+  var ok = logReader.registerStore('logs', {
+    update: function (msg) {
+      // Ignore all messages but 'added'
+      //console.log('got an update msg: ', msg);
+      if (msg.msg !== 'added')
+        return;
+      var obj = msg.fields.obj;
+      obj = Log.parse(obj);
+      obj && console.log(Log.format(obj, {color: true}));
+    },
+
+    beginUpdate: function (batchSize, reset) {
+      //console.log('got begin Update ', batchSize, reset);
+    },
+
+    endUpdate: function () {
+      //console.log('got endUpdate');
+    },
+
+    saveOriginals: function () {
+      //console.log('got save origs');
+    },
+
+    retrieveOriginals: function () {
+      //console.log('got retrieve origs');
     }
   });
 
+  //console.log('registered store ', ok);
   // XXX make this talk to a separate logReader service instead of
   // ultraworld direcly
   prettySub(logReader, "logsForApp", [options.app], {
@@ -209,6 +231,6 @@ exports.logs = function (options) {
   });
 
   // Close connections to Galaxy and log-reader (otherwise Node will continue running).
-  galaxy.close();
-  logReader.close();
+//  galaxy.close();
+//  logReader.close();
 };
